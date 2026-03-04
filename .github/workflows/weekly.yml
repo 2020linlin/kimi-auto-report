@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: '3.9'
           
-      - run: pip install requests duckduckgo-search
+      - run: pip install requests duckduckgo-search typing_extensions
       
       - run: python monitor.py
         env:
