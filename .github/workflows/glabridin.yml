@@ -3,7 +3,7 @@ name: 光甘草定监控
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 1 * * 1'
+    - cron: '0 1 * * 1'  # 每周一上午9点
 
 jobs:
   build:
@@ -19,14 +19,14 @@ jobs:
           pip install --upgrade pip
           pip install requests duckduckgo-search typing_extensions
       
-      - run: python monitor.py
+      - run: python monitor_scripts/glabridin_monitor.py
         env:
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           
       - name: 获取报告文件名
         id: report
         run: |
-          REPORT_FILE=$(ls report_*.md | head -1)
+          REPORT_FILE=$(ls Glabridin_report_*.md | head -1)
           echo "filename=$REPORT_FILE" >> $GITHUB_OUTPUT
           
       - uses: dawidd6/action-send-mail@v3
@@ -36,7 +36,7 @@ jobs:
           secure: true
           username: ${{ secrets.EMAIL_USER }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: 光甘草定周报 ${{ steps.report.outputs.filename }}
+          subject: "🧬 光甘草定周报 ${{ steps.report.outputs.filename }}"
           to: ${{ secrets.EMAIL_USER }}
           from: R&D <${{ secrets.EMAIL_USER }}>
           html_body: file://${{ steps.report.outputs.filename }}
