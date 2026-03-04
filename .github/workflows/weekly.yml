@@ -1,0 +1,274 @@
+name: 光甘草定合成生物学监控
+on:
+  schedule:
+    - cron: '0 1 * * 1'  # 每周一上午9点（北京时间）
+  workflow_dispatch:
+
+jobs:
+  synbio_intelligence:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: 设置Python环境
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          
+      - name: 安装依赖
+        run: pip install requests duckduckgo-search feedparser
+      
+      - name: 合成生物学情报收集
+        env:
+          MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
+        run: |
+          cat > synbio_monitor.py << 'EOF'
+          import os
+          import requests
+          import json
+          from duckduckgo_search import DDGS
+          from datetime import datetime
+          import re
+
+          # 合成生物学专用关键词矩阵
+          SYNBIO_KEYWORDS = {
+              "底盘细胞与宿主": [
+                  "光甘草定 重组酵母 酿酒酵母",
+                  "光甘草定 解脂耶氏酵母 合成",
+                  "光甘草定 大肠杆菌 异源表达",
+                  "光甘草定 丝状真菌 米曲霉",
+                  "Glabridin yeast chassis cell factory"
+              ],
+              "代谢通路优化": [
+                  "光甘草定 异黄酮合成通路",
+                  "光甘草定 甘草素 甘草苷 生物合成",
+                  "光甘草定 前体供应 苯丙氨酸",
+                  "光甘草定 竞争通路 敲除",
+                  "光甘草定 细胞色素P450 CYP"
+              ],
+              "酶工程与定向进化": [
+                  "光甘草定 查耳酮合酶 CHS",
+                  "光甘草定 异黄酮合酶 IFS",
+                  "光甘草定 糖基转移酶 修饰",
+                  "酶定向进化 光甘草定 合成",
+                  "光甘草定 关键酶 异源表达"
+              ],
+              "发酵工艺与产量": [
+                  "光甘草定 发酵工艺 优化",
+                  "光甘草定 产量 滴度 g/L",
+                  "光甘草定 补料发酵 糖转化率",
+                  "光甘草定 两相发酵 萃取原位",
+                  "Glabridin titer yield fermentation"
+              ],
+              "合成生物学专利": [
+                  "光甘草定 合成生物学 专利",
+                  "光甘草定 微生物合成 发明专利",
+                  "Glabridin biosynthesis patent",
+                  "异黄酮 生物合成 基因工程 专利"
+              ]
+          }
+
+          def search_synbio_literature(keyword):
+              """搜索合成生物学专业文献"""
+              results = []
+              try:
+                  with DDGS() as ddgs:
+                      # 优先搜索学术和技术文档
+                      web_results = ddgs.text(
+                          keyword, 
+                          max_results=6,
+                          timelimit="m"  # 最近一月（合成生物学进展较慢，放宽时间）
+                      )
+                      for r in web_results:
+                          title = r['title'].lower()
+                          body = r['body'].lower()
+                          # 过滤商业广告，保留技术内容
+                          if any(x in title for x in ['buy', 'price', 'supplier', 'vendor', 'market']):
+                              continue
+                          # 优先保留含技术指标的内容
+                          has_tech_indicator = any(x in body for x in [
+                              'mg/l', 'g/l', 'yield', 'titer', 'conversion', 
+                              'pathway', 'strain', 'fermentation', 'enzyme'
+                          ])
+                          results.append({
+                              "title": r['title'],
+                              "url": r['href'],
+                              "snippet": r['body'][:400],
+                              "priority": "high" if has_tech_indicator else "normal"
+                          })
+              except Exception as e:
+                  print(f"搜索错误 [{keyword}]: {e}")
+              return results
+
+          def extract_tech_data(text):
+              """提取关键技术数据（滴度、产率等）"""
+              patterns = {
+                "滴度": r'(\d+\.?\d*)\s*(mg\/l|g\/l|μg\/ml)',
+                "产率": r'(yield|conversion).{0,20}(\d+\.?\d*)%',
+                "发酵时间": r'(\d+)\s*(h|hours|天|d)',
+                "底物浓度": r'(glucose|甘油|葡萄糖).{0,10}(\d+\.?\d*)\s*(g\/l|mM)'
+              }
+              extracted = {}
+              for key, pattern in patterns.items():
+                  matches = re.findall(pattern, text, re.IGNORECASE)
+                  if matches:
+                      extracted[key] = matches[:3]  # 取前3个匹配
+              return extracted
+
+          def analyze_synbio_content(category, articles):
+              """合成生物学专业分析"""
+              if not articles:
+                  return "**状态**：本周该方向暂无新进展。\n\n**建议**：扩大检索至相关异黄酮（甘草素、异甘草素）研究，或关注基础代谢工程方法学进展。"
+              
+              api_key = os.getenv('MOONSHOT_API_KEY')
+              if not api_key:
+                  return "⚠️ API未配置"
+              
+              # 构造技术上下文，优先高优先级文章
+              sorted_articles = sorted(articles, key=lambda x: x['priority'] == 'high', reverse=True)
+              context = "\n\n".join([
+                  f"【{i+1}】{a['title']} [{'高相关' if a['priority']=='high' else '一般'}]\n{a['snippet']}\n链接：{a['url']}" 
+                  for i, a in enumerate(sorted_articles[:10])
+              ])
+              
+              # 提取数据
+              all_text = " ".join([a['snippet'] for a in articles])
+              tech_data = extract_tech_data(all_text)
+              
+              prompt = f"""你是一名合成生物学研发专家，专注于植物天然产物（萜类、苯丙素类/异黄酮）的微生物合成。
+请对以下【{category}】方向的最新技术情报进行深度分析：
+
+{context}
+
+【技术指标提取】（如有）：
+{json.dumps(tech_data, ensure_ascii=False) if tech_data else "未提取到具体数值"}
+
+【分析要求 - 合成生物学专用】：
+1. **技术突破点**（2-4条）
+   - 新底盘细胞（如：解脂耶氏酵母 vs 酿酒酵母优劣）
+   - 通路改造策略（如：前体池扩大、竞争通路敲除、NADPH再生）
+   - 酶工程进展（如：查耳酮异构酶、P450单加氧酶定向进化）
+
+2. **关键性能指标对比**（表格形式）
+   - 滴度（Titer）：mg/L 或 g/L 级别
+   - 产率（Yield）：mol/mol 或 g/g 葡萄糖
+   - 发酵时长：小时或天
+   - 与化学合成/植物提取的成本对比（如有提及）
+
+3. **技术可行性评估**
+   - 🔴 概念验证（PoC）：<100 mg/L，仅验证通路
+   - 🟡 中试前：0.1-1 g/L，需解决毒性/稳定性
+   - 🟢 接近产业化：>1 g/L，具备经济可行性
+   - 评估当前技术成熟度及主要瓶颈（如：细胞毒性、前体供应不足、酶活性低）
+
+4. **对我们项目的直接启示**
+   - **立即可复现**：哪些实验条件/质粒构建可直接借鉴？
+   - **需要验证**：哪些策略值得在我们底盘细胞中测试？
+   - **风险提示**：提及的技术难点（如：光甘草定对酵母的毒性、低水溶性导致的胞内积累）
+
+5. **关键文献与专利追踪**
+   - 列出高价值原文链接，标注是否为核心专利（需规避）或公开技术（可借鉴）
+
+【专业背景提示】：
+- 光甘草定（Glabridin）属于异黄酮类，合成路径：苯丙氨酸 → 查耳酮 → 甘草素（Liquiritigenin）→ 光甘草定
+- 关键酶：查耳酮合酶（CHS）、查耳酮还原酶（CHR）、异黄酮合酶（IFS）、P450酶（CYP81E家族）
+- 常用底盘：酿酒酵母（Saccharomyces cerevisiae）、解脂耶氏酵母（Yarrowia lipolytica，适合亲脂性产物）
+- 瓶颈：光甘草定疏水性强，易积累在膜上导致毒性；P450酶表达常需优化电子传递链
+
+输出格式：Markdown，技术细节准确，避免商业描述，使用合成生物学术语（如：滴度、底盘、异源表达、代谢流、通量等）。"""
+
+              headers = {"Authorization": f"Bearer {api_key}"}
+              try:
+                  resp = requests.post(
+                      "https://api.moonshot.cn/v1/chat/completions",
+                      headers=headers,
+                      json={
+                          "model": "moonshot-v1-32k",
+                          "messages": [{"role": "user", "content": prompt}],
+                          "temperature": 0.1
+                      },
+                      timeout=150
+                  )
+                  return resp.json()["choices"][0]["message"]["content"]
+              except Exception as e:
+                  return f"分析失败: {str(e)}"
+
+          def generate_strain_development_suggestions():
+              """基于合成生物学趋势生成菌株开发建议"""
+              return """**本周菌株开发建议**：
+1. 若发现新P450酶变体，建议评估在我们底盘中的活性（通过体内异源表达+LC-MS检测产物）
+2. 关注提及的耐受性改造策略（如：过表达ABC转运蛋白、强化细胞膜甾醇合成）
+3. 如产量突破g/L级别，立即分析其补料策略（限制性葡萄糖 vs 甘油脉冲）"""
+
+          def main():
+              report = [
+                  f"# 🧬 光甘草定合成生物学情报周报\n",
+                  f"**监控日期**：{datetime.now().strftime('%Y-%m-%d')} | **技术方向**：微生物合成与代谢工程\n",
+                  f"**关键词**：重组酵母、异黄酮通路、CYP450、发酵优化\n\n---\n"
+              ]
+              
+              total_papers = 0
+              
+              for category, keywords in SYNBIO_KEYWORDS.items():
+                  print(f"🔍 检索：{category}...")
+                  category_results = []
+                  
+                  for kw in keywords:
+                      papers = search_synbio_literature(kw)
+                      category_results.extend(papers)
+                      total_papers += len(papers)
+                  
+                  # 去重
+                  seen = set()
+                  unique_results = []
+                  for r in category_results:
+                      if r['url'] not in seen:
+                          seen.add(r['url'])
+                          unique_results.append(r)
+                  
+                  if unique_results:
+                      analysis = analyze_synbio_content(category, unique_results)
+                      report.append(f"\n## {category}\n{analysis}\n")
+                  else:
+                      report.append(f"\n## {category}\n*本周该方向无新动态*\n")
+              
+              # 研发建议
+              report.append("\n---\n## 🧪 菌株开发建议\n")
+              report.append(generate_strain_development_suggestions())
+              
+              # 附录
+              report.append("\n---\n## 📋 监控词表\n")
+              for cat, kws in SYNBIO_KEYWORDS.items():
+                  report.append(f"**{cat}**：{', '.join(kws[:2])} 等{kws.__len__()}个关键词\n")
+              
+              # 保存
+              filename = f"光甘草定合成生物学周报_{datetime.now().strftime('%Y%m%d')}.md"
+              with open(filename, "w", encoding="utf-8") as f:
+                  f.write("".join(report))
+              
+              print(f"✅ 合成生物学周报生成：{filename} | 共检索{total_papers}条文献")
+              
+              with open(os.environ.get('GITHUB_ENV', '/dev/null'), "a") as f:
+                  f.write(f"REPORT_FILE={filename}\n")
+
+          if __name__ == "__main__":
+              main()
+          EOF
+          
+          python synbio_monitor.py
+          
+      - name: 发送研发邮件
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.qq.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "🧬 光甘草定合成生物学情报 ${{ github.run_number }} | $(date +%Y-%m-%d)"
+          to: ${{ secrets.EMAIL_USER }}
+          from: SynBio-R&D <${{ secrets.EMAIL_USER }}>
+          html_body: file://光甘草定合成生物学周报_*.md
+          convert_markdown: true
+          
