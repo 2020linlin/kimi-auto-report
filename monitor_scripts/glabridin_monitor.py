@@ -241,7 +241,7 @@ def main():
     report.append("3. 评估新出现的代谢流调控工具（如CRISPRi）在光甘草定合成中的应用潜力\n")
     
     # 保存
-    filename = f"report_{datetime.now().strftime('%Y%m%d')}.md"
+    filename = f"Glabridin_report_{datetime.now().strftime('%Y%m%d')}.md"
     with open(filename, "w", encoding="utf-8") as f:
         f.write("".join(report))
     
