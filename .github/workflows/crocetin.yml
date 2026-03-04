@@ -1,0 +1,43 @@
+name: 藏花酸监控
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 3'  # 每周三上午11点（北京时间）
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          
+      - run: |
+          pip install --upgrade pip
+          pip install requests duckduckgo-search typing_extensions
+      
+      - run: python monitor_scripts/crocetin_monitor.py
+        env:
+          MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
+          
+      - name: 获取报告文件名
+        id: report
+        run: |
+          REPORT_FILE=$(ls Crocetin_report_*.md | head -1)
+          echo "filename=$REPORT_FILE" >> $GITHUB_OUTPUT
+          
+      - uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.qq.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "🌺 藏花酸周报 ${{ steps.report.outputs.filename }}"
+          to: ${{ secrets.EMAIL_USER }}
+          from: R&D <${{ secrets.EMAIL_USER }}>
+          html_body: file://${{ steps.report.outputs.filename }}
+          convert_markdown: true
