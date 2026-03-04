@@ -1,5 +1,4 @@
-name:
- 人参皂苷CK监控
+name: 人参皂苷CK监控
 
 on:
   workflow_dispatch:
@@ -8,14 +7,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-
-latest
+    runs-on: ubuntu-latest
     steps:
-      - uses:
- actions/checkout@v3
+      - uses: actions/checkout@v3
       
-      - uses: actions/setup-
-python@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
           
@@ -23,24 +19,19 @@ python@v4
           pip install --upgrade pip
           pip install requests duckduckgo-search typing_extensions
       
-      - run:
- python monitor_scripts/ginsenoside_ck_monitor.py
+      - run: python monitor_scripts/ginsenoside_ck_monitor.py
         env:
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
           
-      - name:
- 获取报告文件名
-        id:
- report
+      - name: 获取报告文件名
+        id: report
         run: |
           REPORT_FILE=$(ls CK_report_*.md | head -1)
           echo "filename=$REPORT_FILE" >> $GITHUB_OUTPUT
           
-      - uses: dawidd6/action-send-
-mail@v3
+      - uses: dawidd6/action-send-mail@v3
         with:
-          server_address:
- smtp.qq.com
+          server_address: smtp.qq.com
           server_port: 465
           secure: true
           username: ${{ secrets.EMAIL_USER }}
