@@ -1,38 +1,34 @@
-name: 光甘草定合成生物学监控
+name: 光甘草定监控
+
 on:
+  workflow_dispatch:
   schedule:
     - cron: '0 1 * * 1'
-  workflow_dispatch:
 
 jobs:
-  synbio_intelligence:
+  build:
     runs-on: ubuntu-latest
-    
     steps:
       - uses: actions/checkout@v3
       
-      - name: 设置Python环境
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
           
-      - name: 安装依赖
-        run: pip install requests duckduckgo-search feedparser
+      - run: pip install requests duckduckgo-search
       
-      - name: 运行监控脚本
+      - run: python monitor.py
         env:
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
-        run: python monitor.py
           
-      - name: 发送邮件
-        uses: dawidd6/action-send-mail@v3
+      - uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.qq.com
           server_port: 465
           secure: true
           username: ${{ secrets.EMAIL_USER }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: "光甘草定合成生物学周报 ${{ github.run_number }}"
+          subject: 光甘草定周报
           to: ${{ secrets.EMAIL_USER }}
           from: R&D <${{ secrets.EMAIL_USER }}>
           html_body: file://report_*.md
