@@ -3,7 +3,7 @@ name: 光甘草定监控
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 1 * * 1'  # 每周一上午9点
+    - cron: '0 1 * * 1'
 
 jobs:
   build:
@@ -19,17 +19,31 @@ jobs:
           pip install --upgrade pip
           pip install requests duckduckgo-search typing_extensions
       
-      - run: python monitor_scripts/glabridin_monitor.py
+      - name: 运行监控脚本
+        run: python monitor_scripts/glabridin_monitor.py
         env:
           MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
+          
+      - name: 列出生成的文件
+        run: |
+          echo "当前目录文件："
+          ls -la *.md 2>/dev/null || echo "没有找到 .md 文件"
           
       - name: 获取报告文件名
         id: report
         run: |
-          REPORT_FILE=$(ls Glabridin_report_*.md | head -1)
-          echo "filename=$REPORT_FILE" >> $GITHUB_OUTPUT
+          REPORT_FILE=$(ls Glabridin_report_*.md 2>/dev/null | head -1)
+          if [ -z "$REPORT_FILE" ]; then
+            echo "filename=report_not_found.md" >> $GITHUB_OUTPUT
+            echo "未找到报告文件，创建默认文件"
+            echo "# 报告生成失败" > report_not_found.md
+          else
+            echo "filename=$REPORT_FILE" >> $GITHUB_OUTPUT
+            echo "找到报告：$REPORT_FILE"
+          fi
           
-      - uses: dawidd6/action-send-mail@v3
+      - name: 发送邮件
+        uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.qq.com
           server_port: 465
