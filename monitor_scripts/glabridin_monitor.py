@@ -362,7 +362,7 @@ def main():
     
     # 保存
     filename = f"Glabridin_report_{datetime.now().strftime('%Y%m%d')}.md"
-    filepath = os.path.join(os.path.dirname(__file__), filename)
+    filepath = filename
     
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("".join(report))
