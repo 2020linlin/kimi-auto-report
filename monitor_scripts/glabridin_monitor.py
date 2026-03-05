@@ -116,7 +116,6 @@ def extract_tech_data(text):
     return found
 
 def analyze_with_kimi(category, articles):
-    """Kimi智能分析"""
     if not articles:
         return "本周该方向暂无新文献。"
     
@@ -124,7 +123,6 @@ def analyze_with_kimi(category, articles):
     if not api_key:
         return "⚠️ 未配置 MOONSHOT_API_KEY"
     
-    # 区分中英文来源
     cn_articles = [a for a in articles if any('\u4e00' <= c <= '\u9fff' for c in a['title'])]
     en_articles = [a for a in articles if a not in cn_articles]
     
@@ -138,37 +136,19 @@ def analyze_with_kimi(category, articles):
     
     data = extract_tech_data(context)
     
-    prompt = f"""你是一名合成生物学研发专家，请对以下【{category}】方向的中英文文献进行综合分析：
+    prompt = f"""你是一名合成生物学专家，分析光甘草定【{category}】方向的技术情报：
 
 {context}
 
 【提取的技术数据】：{json.dumps(data, ensure_ascii=False) if data else "无"}
 
-【分析要求】：
-1. **中文研究进展**（2-3条）
-   - 国内高校/研究所的最新成果
-   - 专利布局情况
+请按以下格式分析：
+1. 技术突破点（2-3条）
+2. 关键指标（滴度、产率等）
+3. 技术成熟度（🔴概念验证/🟡中试前/🟢产业化）
+4. 对我们项目的建议（具体可操作的实验方向）
 
-2. **国际研究前沿**（2-3条）
-   - 国外顶级期刊（Nature/Science/Metabolic Engineering等）相关研究
-   - 国际团队的技术突破
-
-3. **技术对比分析**
-   - 中外技术路线差异（如：国内重发酵优化 vs 国外重通路设计）
-   - 关键性能指标对比（滴度、产率、纯度）
-
-4. **可操作建议**
-   - 哪些中文技术容易快速跟进？
-   - 哪些国外前沿值得长期布局？
-   - 建议阅读的3篇核心文献（附链接）
-
-【专业提示】：
-- 光甘草定（Glabridin, CAS 59870-68-7）为异黄酮类化合物
-- 关键合成路径：苯丙氨酸→查耳酮→甘草素→光甘草定
-- 常用底盘：酿酒酵母（S. cerevisiae）、解脂耶氏酵母（Y. lipolytica）
-- 关键酶：CHS（查耳酮合酶）、CHR（查耳酮还原酶）、IFS（异黄酮合酶）、CYP450
-
-输出格式：Markdown，专业术语准确，中英文文献分开总结。"""
+注意：光甘草定是异黄酮类，合成路径涉及查耳酮合酶、CYP450等，常用酵母底盘。"""
 
     try:
         resp = requests.post(
@@ -181,10 +161,21 @@ def analyze_with_kimi(category, articles):
             },
             timeout=150
         )
-        return resp.json()["choices"][0]["message"]["content"]
+        
+        # 修复：增加错误处理
+        if resp.status_code != 200:
+            return f"API请求失败，状态码: {resp.status_code}, 内容: {resp.text[:500]}"
+        
+        result = resp.json()
+        if "choices" in result and len(result["choices"]) > 0:
+            return result["choices"][0]["message"]["content"]
+        elif "error" in result:
+            return f"API错误: {result['error'].get('message', '未知错误')}"
+        else:
+            return f"API返回异常: {str(result)[:500]}"
+            
     except Exception as e:
-        return f"分析失败: {e}"
-
+        return f"分析失败: {str(e)}"
 def main():
     report = [
         f"# 🧬 光甘草定合成生物学情报周报（中英双语）\n",
