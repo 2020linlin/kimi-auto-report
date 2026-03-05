@@ -1,0 +1,51 @@
+name: 合成生物学技术周报
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 4'  # 每周四上午12点（北京时间周四20点，或改为'0 1 * * 4'为周四9点）
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          
+      - run: |
+          pip install --upgrade pip
+          pip install requests duckduckgo-search typing_extensions
+      
+      - name: 运行合成生物学技术监控
+        run: python monitor_scripts/general_synbio_monitor.py
+        env:
+          MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
+          
+      - name: 获取报告文件名
+        id: report
+        run: |
+          REPORT_FILE=$(ls SynBio_Tech_Weekly_*.md 2>/dev/null | head -1)
+          if [ -z "$REPORT_FILE" ]; then
+            echo "filename=SynBio_report_not_found.md" >> $GITHUB_OUTPUT
+            echo "# 合成生物学技术周报 - 生成中" > SynBio_report_not_found.md
+          else
+            echo "filename=$REPORT_FILE" >> $GITHUB_OUTPUT
+            echo "找到报告：$REPORT_FILE"
+          fi
+          
+      - name: 发送技术周报邮件
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.qq.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.EMAIL_USER }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "🧬 合成生物学技术周报 ${{ steps.report.outputs.filename }}"
+          to: ${{ secrets.EMAIL_USER }}
+          from: SynBio情报中心 <${{ secrets.EMAIL_USER }}>
+          html_body: file://${{ steps.report.outputs.filename }}
+          convert_markdown: true
