@@ -3,7 +3,7 @@ name: 光甘草定监控
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 10 * * 1'
+    - cron: '0 2 * * 1'
 
 jobs:
   build:
