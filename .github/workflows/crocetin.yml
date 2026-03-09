@@ -3,7 +3,7 @@ name: 藏花酸监控
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * 3'  # 每周三上午11点（北京时间）
+    - cron: '0 10 * * 3'  # 每周三上午11点（北京时间）
 
 jobs:
   build:
